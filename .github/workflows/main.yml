@@ -1,0 +1,67 @@
+name: Terraform CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  terraform:
+    name: Terraform Deployment Lifecycle
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. Récupération du code source
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # 2. Configuration de Docker (déjà installé sur ubuntu-latest)
+      - name: Verify Docker Installation
+        run: docker --version
+
+      # 3. Setup Terraform - Installation de Terraform CLI
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.6.0
+
+      # 4. Init - Initialisation de Terraform
+      - name: Terraform Init
+        run: terraform init
+        working-directory: .
+
+      # 5. Format - Vérification du formatage (optionnel mais recommandé)
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+
+      # 6. Validate - Validation de la syntaxe
+      - name: Terraform Validate
+        run: terraform validate
+
+      # 7. Plan - Planification et détection des changements
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD || 'strongpassword123' }}
+
+      # 8. Apply - Application des changements (uniquement sur push vers main)
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform apply -auto-approve tfplan
+        
+      # 9. Outputs - Affichage des informations de déploiement
+      - name: Display Outputs
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform output
+
+      # 10. Cleanup (optionnel) - Destruction des ressources pour environnement de test
+      # Décommentez cette section si vous voulez détruire automatiquement l'infrastructure
+      # - name: Terraform Destroy
+      #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      #   run: terraform destroy -auto-approve
+      #   env:
+      #     TF_VAR_db_password: ${{ secrets.DB_PASSWORD || 'strongpassword123' }}
